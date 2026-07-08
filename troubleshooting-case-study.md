@@ -19,7 +19,7 @@ After applying the following ACL to the Sales-facing subinterface:
 access-list 100 deny ip 10.10.10.0 0.0.0.255 10.10.30.0 0.0.0.255
 access-list 100 permit ip any any
 
-interface GigabitEthernet0/0.10
+interface GigabitEthernet0/1.10
  ip access-group 100 in
 ```
 
@@ -36,8 +36,8 @@ Ran `show access-lists` on HQ-R1 after attempting the Mgmt → Sales ping:
 
 ```
 Extended IP access list 100
-    10 deny ip 10.10.10.0 0.0.0.255 10.10.30.0 0.0.0.255 (34 matches)
-    20 permit ip any any (112 matches)
+    10 deny ip 10.10.10.0 0.0.0.255 10.10.30.0 0.0.0.255 (4 matches)
+    20 permit ip any any (8 matches)
 ```
 
 The match counter on the deny line was incrementing even though the ping was initiated *from* Management, not Sales — a strong signal the ACL was catching something other than the initial request packet.
@@ -45,8 +45,8 @@ The match counter on the deny line was incrementing even though the ping was ini
 ### Step 2 — Trace packet direction through the router
 Walked through the actual packet flow for a single ping:
 
-1. **Echo request**: Mgmt-PC1 (10.10.30.x) → Sales-PC1 (10.10.10.x). Enters router on the Mgmt subinterface (Gi0/0.30) — no ACL applied there, so it passes through and is forwarded to Sales.
-2. **Echo reply**: Sales-PC1 (10.10.10.x) → Mgmt-PC1 (10.10.30.x). This reply packet has **source = Sales, destination = Mgmt**, and it enters the router inbound on **Gi0/0.10** — exactly where the deny rule is applied, and exactly what it matches.
+1. **Echo request**: Mgmt-PC1 (10.10.30.11) → Sales-PC1 (10.10.10.11). Enters router on the Mgmt subinterface (Gi0/1.30) — no ACL applied there, so it passes through and is forwarded to Sales.
+2. **Echo reply**: Sales-PC1 (10.10.10.11) → Mgmt-PC1 (10.10.30.11). This reply packet has **source = Sales, destination = Mgmt**, and it enters the router inbound on **Gi0/1.10** — exactly where the deny rule is applied, and exactly what it matches.
 
 ### Root Cause
 Extended ACLs in Cisco IOS are **stateless** — they evaluate each packet independently based on its source/destination address, with no awareness of whether it's part of an already-permitted conversation. The deny rule was written to block Sales-sourced traffic destined for Management, but it had no way to distinguish "Sales-initiated traffic" from "a reply to Management-initiated traffic" — both have the same source/destination address pattern. As a result, the ACL was silently discarding the return traffic for every Management-initiated ping, breaking a direction of communication that was never meant to be restricted.
@@ -61,11 +61,12 @@ Two options were considered:
 
 2. **Explicit bidirectional deny** — block both directions outright, since in practice most VLAN isolation policies of this kind are intended to fully segment two groups from each other rather than allow one-way asymmetric access.
 
-**Decision:** Option 2 was implemented, as it matched the practical intent of the policy (segment Sales and Management entirely) without introducing reflexive ACL complexity that wasn't otherwise needed in this design.
+**Decision:** Option 2 was implemented, as it matched the practical intent of the policy (segment Sales and Management entirely) without introducing reflexive ACL complexity that wasn't otherwise needed in this design. Also added a line to ALC to prevent HQ-1 Mgmt VLAN from accessing Branch-Sales VLAN.
 
 ```
 access-list 100 deny ip 10.10.10.0 0.0.0.255 10.10.30.0 0.0.0.255
 access-list 100 deny ip 10.10.30.0 0.0.0.255 10.10.10.0 0.0.0.255
+access-list 100 deny ip 10.10.30.0 0.0.0.255 10.20.10.0 0.0.0.255
 access-list 100 permit ip any any
 ```
 
@@ -92,30 +93,30 @@ After implementing the bidirectional deny rules described in the Resolution sect
 Checked which interfaces the ACL was actually applied to:
 
 ```
-show ip interface GigabitEthernet0/0.10 | include access list
-show ip interface GigabitEthernet0/0.30 | include access list
+show ip interface GigabitEthernet0/1.10 | include access list
+show ip interface GigabitEthernet0/1.30 | include access list
 ```
 
-Only `Gi0/0.10` (Sales) showed the ACL applied inbound. `Gi0/0.30` (Management) had no ACL applied at all.
+Only `Gi0/1.10` (Sales) showed the ACL applied inbound. `Gi0/1.30` (Management) had no ACL applied at all.
 
 ### Root Cause
-An inbound ACL only inspects traffic **entering the router through that specific interface** — it has no relationship to a packet's destination. Applying the ACL solely on the Sales interface meant only Sales-sourced traffic was ever being evaluated. Traffic sourced from Management and destined for Sales entered the router through the Management interface (Gi0/0.30), which had no ACL applied, so the second deny line was never actually being evaluated against real traffic.
+An inbound ACL only inspects traffic **entering the router through that specific interface** — it has no relationship to a packet's destination. Applying the ACL solely on the Sales interface meant only Sales-sourced traffic was ever being evaluated. Traffic sourced from Management and destined for Sales entered the router through the Management interface (Gi0/1.30), which had no ACL applied, so the second deny line was never actually being evaluated against real traffic.
 
 ### Fix
 Applied the same ACL inbound on both interfaces, since there were now two distinct source subnets to filter:
 
 ```
-interface GigabitEthernet0/0.10
+interface GigabitEthernet0/1.10
  ip access-group 100 in
 
-interface GigabitEthernet0/0.30
+interface GigabitEthernet0/1.30
  ip access-group 100 in
 ```
 
 ### Verification
 ```
-show ip interface GigabitEthernet0/0.10 | include access list
-show ip interface GigabitEthernet0/0.30 | include access list
+show ip interface GigabitEthernet0/1.10 | include access list
+show ip interface GigabitEthernet0/1.30 | include access list
 ```
 Both interfaces now show `access list 100` applied. Re-ran ping tests:
 - Sales-PC1 → Mgmt-PC1: fails (expected)
