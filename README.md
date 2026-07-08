@@ -1,4 +1,4 @@
-# Enterprise Branch Network Lab — ClearPath Logistics
+# Enterprise Branch Network Lab
 
 A hands-on network engineering project simulating a two-site enterprise network for a fictional logistics company, built to demonstrate practical CCNA-level skills: VLAN segmentation, inter-VLAN routing, OSPF, NAT/PAT, ACLs, and device hardening.
 
@@ -6,7 +6,7 @@ A hands-on network engineering project simulating a two-site enterprise network 
 
 ## Project Scenario
 
-**ClearPath Logistics** is a small logistics company with a Head Office (HQ) and one Branch Office, connected over a WAN link, with internet access provided through a simulated ISP at HQ. The design requirements were:
+A small company with a Head Office (HQ) and one Branch Office, connected over a WAN link, with internet access provided through a simulated ISP at HQ. The design requirements were:
 
 - Separate VLANs for Sales, IT, and Management at each site
 - Inter-VLAN routing via router-on-a-stick
@@ -98,15 +98,6 @@ During implementation, an ACL intended to block only Sales→Management traffic 
 - **Management VLAN does not have SSH access to network devices** in this design — only the IT subnet does, reflecting a deliberate separation-of-duties decision (IT manages the network; Management does not have direct device access). This is configurable if the intended policy differs.
 - **Credentials shown in configs are lab-only** and would never be committed to a real production repository. In a production environment, device authentication would be handled through a centralized AAA server (e.g., TACACS+/RADIUS) rather than local usernames.
 - **The ISP is simulated with a generic router**, since simulation tools like Packet Tracer don't provide a fully functional "cloud" object for realistic NAT/routing testing.
-
----
-
-## What I'd Add Next
-
-- Site-to-site VPN between HQ and Branch instead of a plain WAN link
-- Reflexive ACLs for true one-directional (rather than fully bidirectional) VLAN isolation
-- Basic network automation using Python/Netmiko to pull `show` command output from all devices
-- SNMP-based monitoring (e.g., LibreNMS) watching device health and interface status
 
 ---
 
