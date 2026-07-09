@@ -1,0 +1,143 @@
+! ================================================================
+! Device: HQ-R1
+! Role: HQ Head-End Router
+! Functions: Inter-VLAN routing (router-on-a-stick), OSPF, NAT/PAT,
+!            ACL-based VLAN isolation, SSH hardening restricted to IT subnet
+! Project: Enterprise Branch Network Lab
+! 
+! Username - admin
+! Password - Project1
+! Console Password - HeadOffice1
+! ================================================================
+
+Building configuration...
+
+Current configuration : 3184 bytes
+!
+version 15.1
+service password-encryption
+!
+hostname HQ-R1
+!
+enable secret 5 $1$mERr$gSKjFDu3TGwZ7UlRWQj6R/
+!
+! ---------------- DHCP Pools ----------------
+!
+ip dhcp excluded-address 10.10.10.1 10.10.10.10
+ip dhcp excluded-address 10.10.20.1 10.10.20.10
+ip dhcp excluded-address 10.10.30.1 10.10.30.10
+!
+ip dhcp pool VLAN10 ( SALES-HQ )
+ network 10.10.10.0 255.255.255.0
+ default-router 10.10.10.1
+!
+ip dhcp pool VLAN20 ( IT-HQ )
+ network 10.10.20.0 255.255.255.0
+ default-router 10.10.20.1
+!
+ip dhcp pool VLAN30 ( Mgmt-HQ )
+ network 10.10.30.0 255.255.255.0
+ default-router 10.10.30.1
+!
+no ip cef
+no ipv6 cef
+!
+username admin secret 5 $1$mERr$SjWbw.dC0nb6S2rzaLL1i.
+!
+ip ssh version 2
+ip domain-name enterprise1.local
+!
+! ---------------- Interfaces ----------------
+!
+interface GigabitEthernet0/0
+ ip address 203.0.113.2 255.255.255.252
+ ip nat outside
+ duplex auto
+ speed auto
+!
+interface GigabitEthernet0/1
+ no ip address
+ ip nat inside
+ duplex auto
+ speed auto
+!
+interface GigabitEthernet0/1.10
+ encapsulation dot1Q 10
+ ip address 10.10.10.1 255.255.255.0
+ ip nat inside
+ ip access-group 100 in
+!
+interface GigabitEthernet0/1.20
+ encapsulation dot1Q 20
+ ip address 10.10.20.1 255.255.255.0
+ ip nat inside
+!
+interface GigabitEthernet0/1.30
+ encapsulation dot1Q 30
+ ip address 10.10.30.1 255.255.255.0
+ ip nat inside
+ ip access-group 100 in
+!
+interface Serial0/1/0
+ ip address 10.0.0.1 255.255.255.252
+ ip nat inside
+ clock rate 64000
+!
+! ---------------- Routing ----------------
+!
+router ospf 1
+ log-adjacency-changes
+ network 10.10.10.0 0.0.0.255 area 0
+ network 10.10.20.0 0.0.0.255 area 0
+ network 10.10.30.0 0.0.0.255 area 0
+ network 10.0.0.0 0.0.0.3 area 0
+ default-information originate
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.1 
+!
+! ---------------- NAT ----------------
+!
+ip nat inside source list 1 interface GigabitEthernet0/0 overload
+!
+! ---------------- Access Lists ----------------
+!
+! NAT source list - internal networks eligible for translation
+access-list 1 permit 10.10.10.0 0.0.0.255
+access-list 1 permit 10.10.20.0 0.0.0.255
+access-list 1 permit 10.10.30.0 0.0.0.255
+access-list 1 permit 10.20.10.0 0.0.0.255
+access-list 1 permit 10.20.20.0 0.0.0.255
+access-list 1 permit 10.0.0.0 0.0.0.3
+!
+! Sales <-> Management VLAN isolation
+access-list 100 deny ip 10.10.10.0 0.0.0.255 10.10.30.0 0.0.0.255
+access-list 100 deny ip 10.10.30.0 0.0.0.255 10.10.10.0 0.0.0.255
+access-list 100 deny ip 10.10.30.0 0.0.0.255 10.20.10.0 0.0.0.255
+access-list 100 permit ip any any
+!
+! SSH management access restricted to IT subnets only
+access-list 10 permit 10.10.20.0 0.0.0.255
+access-list 10 permit 10.20.20.0 0.0.0.255
+access-list 10 deny any
+!
+! ---------------- Management Access ----------------
+!
+banner motd ^C
+***********************************************************
+* WARNING: Unauthorized access to this device is prohibited. *
+* All activity is monitored and logged. Disconnect now if   *
+* you are not an authorized user.                            *
+***********************************************************
+^C
+!
+line con 0
+ exec-timeout 5 0
+ login local
+!
+line vty 0 4
+ access-class 10 in
+ exec-timeout 5 0
+ login local
+ transport input ssh
+!
+end
