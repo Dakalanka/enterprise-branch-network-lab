@@ -1,0 +1,116 @@
+! ================================================================
+! Device: Branch-R1
+! Role: Branch Head-End Router
+! Functions: Inter-VLAN routing (router-on-a-stick), OSPF,
+!            ACL-based VLAN isolation, SSH hardening restricted to IT subnet
+! Project: Enterprise Branch Network Lab
+! 
+! Username - admin
+! Password - Project1
+! Console Password - Branch1
+! ================================================================
+
+Building configuration...
+
+Current configuration : 2265 bytes
+!
+version 15.1
+service password-encryption
+!
+hostname Branch-R1
+!
+enable secret 5 $1$mERr$1q/6yk6SVYq00C4Rv1s7f0
+!
+! ---------------- DHCP Pools ----------------
+!
+ip dhcp excluded-address 10.20.10.1 10.20.10.10
+ip dhcp excluded-address 10.20.20.1 10.20.20.10
+!
+ip dhcp pool VLAN10 ( Sales-Branch )
+ network 10.20.10.0 255.255.255.0
+ default-router 10.20.10.1
+!
+ip dhcp pool VLAN20 ( IT-Branch )
+ network 10.20.20.0 255.255.255.0
+ default-router 10.20.20.1
+!
+no ip cef
+no ipv6 cef
+!
+username admin secret 5 $1$mERr$SjWbw.dC0nb6S2rzaLL1i.
+!
+ip ssh version 2
+ip domain-name enterprise1.local
+!
+! ---------------- Interfaces ----------------
+!
+interface GigabitEthernet0/0
+ no ip address
+ duplex auto
+ speed auto
+ shutdown
+!
+interface GigabitEthernet0/1
+ no ip address
+ duplex auto
+ speed auto
+!
+interface GigabitEthernet0/1.10
+ encapsulation dot1Q 10
+ ip address 10.20.10.1 255.255.255.0
+ ip access-group 100 in
+!
+interface GigabitEthernet0/1.20
+ encapsulation dot1Q 20
+ ip address 10.20.20.1 255.255.255.0
+!
+interface Serial0/1/0
+ ip address 10.0.0.2 255.255.255.252
+!
+interface Serial0/1/1
+ no ip address
+ clock rate 2000000
+ shutdown
+!
+! ---------------- Routing ----------------
+!
+router ospf 1
+ log-adjacency-changes
+ network 10.20.10.0 0.0.0.255 area 0
+ network 10.20.20.0 0.0.0.255 area 0
+ network 10.0.0.0 0.0.0.3 area 0
+!
+ip route 0.0.0.0 255.255.255.255 10.0.0.1 
+!
+! ---------------- Access Lists ----------------
+!
+! Sales <-> Management VLAN isolation
+access-list 100 deny ip 10.20.10.0 0.0.0.255 10.10.30.0 0.0.0.255
+access-list 100 permit ip any any
+!
+! SSH management access restricted to IT subnets only
+access-list 10 permit 10.20.20.0 0.0.0.255
+access-list 10 permit 10.10.20.0 0.0.0.255
+access-list 10 deny any
+!
+banner motd ^C
+***********************************************************
+* WARNING: Unauthorized access to this device is prohibited. *
+* All activity is monitored and logged. Disconnect now if   *
+* you are not an authorized user.                            *
+***********************************************************
+^C
+!
+line con 0
+ exec-timeout 5 0
+ login local
+!
+line aux 0
+!
+line vty 0 4
+ access-class 10 in
+ exec-timeout 5 0
+ login local
+ transport input ssh
+!
+end

@@ -1,0 +1,77 @@
+! ================================================================
+! Device: Branch-SW1
+! Role: Branch Access/Distribution Switch
+! Functions: VLAN assignment (Sales/IT/Mgmt), trunk to Branch-R1 for
+!            router-on-a-stick inter-VLAN routing, SSH hardening
+! Project: Enterprise Branch Network Lab
+!
+! Username - admin
+! Password - Project1
+! Console Password - Branch1
+! ================================================================
+
+Building configuration...
+
+Current configuration : 2679 bytes
+!
+version 15.0
+no service password-encryption
+!
+hostname Branch-SW1
+!
+enable secret 5 $1$mERr$1q/6yk6SVYq00C4Rv1s7f0
+!
+ip ssh version 2
+ip domain-name enterprise1.local
+!
+username admin secret 5 $1$mERr$SjWbw.dC0nb6S2rzaLL1i.
+!
+! ---------------- Interfaces ----------------
+!
+interface FastEthernet0/1
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/2
+ switchport access vlan 10
+ switchport mode access
+ spanning-tree portfast
+ switchport mode access
+!
+interface FastEthernet0/15
+ switchport access vlan 20
+ switchport mode access
+ spanning-tree portfast
+!
+interface FastEthernet0/16
+ switchport access vlan 20
+ switchport mode access
+ spanning-tree portfast
+!
+interface GigabitEthernet0/1
+ description Trunk to Branch-R1
+ switchport trunk allowed vlan 10,20
+ switchport mode trunk
+!
+! ---------------- Management Interface (SVI) ----------------
+!
+interface Vlan20
+ ip address 10.20.20.2 255.255.255.0
+!
+ip default-gateway 10.20.20.1
+!
+! ---------------- Management Access ----------------
+!
+access-list 10 permit 10.10.20.0 0.0.0.255
+access-list 10 permit 10.20.20.0 0.0.0.255
+access-list 10 deny any
+line con 0
+!
+line vty 0 4
+ access-class 10 in
+ exec-timeout 5 0
+ login local
+ transport input ssh
+!
+end
