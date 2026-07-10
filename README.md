@@ -82,7 +82,7 @@ enterprise-branch-network-lab/
 - SSH login succeeds from an IT subnet host and is refused (connection-level, not just authentication-level) from Sales/Management hosts
 - Telnet is refused entirely on all VTY lines
 
-Screenshots of each verification step are in `/screenshots`.
+Screenshots of each verification step are in `screenshots`.
 
 ---
 
